@@ -47,10 +47,14 @@ canvas{width:100%;display:block}
 .cfg{display:grid;grid-template-columns:1fr 90px;gap:8px 10px;align-items:center;font-size:14px;color:#cbd5e1}
 .cfg input[type=number]{text-align:center;padding:8px}.cfg input[type=checkbox]{flex:none;width:22px;height:22px;justify-self:end}
 .mini{background:#ffffff14;color:#cbd5e1;border:0;border-radius:10px;padding:5px 10px;font-size:12px;font-family:inherit}
+.ach{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ai{background:#ffffff0d;border-radius:12px;padding:8px 10px;font-size:13px;color:#94a3b8;border:1px solid transparent}.ai.on{color:#fff;background:#10b98133;border-color:#10b981}.ai b{display:block;font-size:14px}
+#toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-80px);background:#10b981;color:#042;padding:10px 22px;border-radius:30px;font-weight:800;transition:.4s;z-index:9;pointer-events:none}#toast.on{transform:translate(-50%,0)}
+.lvl{display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px}
 .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.hd h3{margin:0}
 </style>
 </head>
 <body>
+<div id="toast"></div>
 <div class="wrap">
   <div class="tabs"><button data-m="0" class="on">تركيز</button><button data-m="1">استراحة قصيرة</button><button data-m="2">استراحة طويلة</button></div>
   <div class="ringbox"><svg viewBox="0 0 200 200"><circle id="bg" cx="100" cy="100" r="90"/><circle id="fg" cx="100" cy="100" r="90" stroke-dasharray="565.5" stroke-dashoffset="0"/></svg>
@@ -60,6 +64,7 @@ canvas{width:100%;display:block}
   <div class="card"><h3>آخر ٧ أيام (جلسات تركيز)</h3><canvas id="ch" width="520" height="170"></canvas>
     <div class="row" style="margin-top:8px"><span>الهدف اليومي: <b id="goalv">٠</b></span><span>أيام متتالية: <b id="streak">٠</b> 🔥</span></div><div class="pg"><i id="gbar" style="width:0"></i></div>
     <div class="row" style="margin-top:8px"><span>النهارده: <b id="today">٠</b></span><span>الإجمالي: <b id="total">٠</b></span><span>الدقائق اليوم: <b id="mins">٠</b></span></div></div>
+<div class="card"><div class="hd"><h3>المستوى والإنجازات</h3><span id="lvt" style="font-size:13px;color:#fcd34d"></span></div><div class="pg"><i id="xpb" style="width:0;background:#fbbf24"></i></div><div class="row"><span>أطول سلسلة أيام: <b id="bst">٠</b></span><span>إجمالي ساعات التركيز: <b id="hrs">٠</b></span></div><div class="ach" id="achg"></div></div>
 <div class="card"><h3>الإعدادات</h3><div class="cfg">
     <label for="cf">مدة التركيز (دقيقة)</label><input id="cf" type="number" min="1" max="120" inputmode="numeric">
     <label for="cs">استراحة قصيرة (دقيقة)</label><input id="cs" type="number" min="1" max="60" inputmode="numeric">
@@ -79,6 +84,18 @@ if(!Array.isArray(S.tasks))S.tasks=[];S.log=S.log||{};S.min=S.min||{};S.cfg=Obje
 const save=()=>{try{localStorage.setItem("focus1",JSON.stringify(S))}catch(e){}};
 const cl=(v,a,b,d)=>{v=Math.round(+v);return v>=a&&v<=b?v:d};
 function applyCfg(){const c=S.cfg;DUR=FAST?[5,3,4]:[c.f*60,c.s*60,c.l*60]}applyCfg();
+const ACHS=[["f1","البداية","أول جلسة تركيز",x=>x.n>=1],["f10","منتظم","10 جلسات",x=>x.n>=10],["f50","محترف","50 جلسة",x=>x.n>=50],["f200","أسطورة","200 جلسة",x=>x.n>=200],["g","هدف اليوم","حقق هدف اليوم",x=>x.goalHit],["d3","3 أيام","سلسلة 3 أيام",x=>x.best>=3],["d7","أسبوع كامل","سلسلة 7 أيام",x=>x.best>=7],["d30","شهر حديد","سلسلة 30 يوم",x=>x.best>=30],["h10","10 ساعات","10 ساعات تركيز",x=>x.min>=600],["h50","50 ساعة","50 ساعة تركيز",x=>x.min>=3000],["t5","منظّم","خلّص 5 مهام",x=>x.done>=5],["day8","يوم مزدحم","8 جلسات في يوم",x=>x.maxDay>=8]];
+const TITLES=["مبتدئ","متحمس","منضبط","محترف","خبير","أسطورة"];
+S.ach=S.ach||{};S.doneCount=S.doneCount||0;
+function agg(){const vals=Object.values(S.log);const n=vals.reduce((a,b)=>a+b,0);const min=Object.keys(S.log).reduce((a,k)=>a+(S.min[k]!=null?S.min[k]:S.log[k]*25),0);
+ const ks=Object.keys(S.log).filter(k=>S.log[k]>0).map(k=>{const p=k.split("-");return new Date(+p[0],+p[1]-1,+p[2]).getTime()}).sort((a,b)=>a-b);let best=0,cur=0,prev=0;for(const t of ks){cur=(prev&&Math.round((t-prev)/864e5)==1)?cur+1:1;best=Math.max(best,cur);prev=t}
+ return{n,min,best,done:S.doneCount,maxDay:Math.max(0,...vals),goalHit:S.goalHit||vals.some(v=>v>=S.cfg.goal)&&S.goalHit}}
+function chkAch(){const x=agg();let neu=null;for(const a of ACHS)if(!S.ach[a[0]]&&a[3](x)){S.ach[a[0]]=1;neu=a}
+ if(neu){save();const t=$("toast");t.textContent="🏅 إنجاز جديد: "+neu[1];t.classList.add("on");setTimeout(()=>t.classList.remove("on"),2800)}
+ const lv=Math.min(TITLES.length-1,Math.floor(Math.sqrt(x.n/4)));const nxt=(lv+1)**2*4,base=lv**2*4;
+ $("lvt").textContent="مستوى "+AR(lv+1)+" · "+TITLES[lv];$("xpb").style.width=Math.min(100,(x.n-base)/(nxt-base)*100)+"%";
+ $("bst").textContent=AR(x.best);$("hrs").textContent=AR(Math.round(x.min/6)/10);
+ $("achg").innerHTML=ACHS.map(a=>`<div class="ai ${S.ach[a[0]]?"on":""}"><b>${S.ach[a[0]]?"✅":"🔒"} ${a[1]}</b>${a[2]}</div>`).join("")}
 let wl=null;
 const dk=(d=new Date())=>d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
 let mode=0,left=DUR[0],end=0,run=false,tick;
@@ -102,7 +119,7 @@ function finish(){
   stop();beep();try{navigator.vibrate&&navigator.vibrate([200,100,200,100,300])}catch(e){}
   try{if(S.cfg.notif&&window.Notification&&Notification.permission==='granted')new Notification(mode==0?'خلصت جلسة التركيز 🍅':'الاستراحة خلصت، يلا نرجع',{body:mode==0?'خد استراحة':'ابدأ جلسة جديدة'})}catch(e){}
   if(mode==0){const k=dk();S.min[k]=(S.min[k]!=null?S.min[k]:(S.log[k]||0)*25)+Math.round(DUR[0]/60);S.log[k]=(S.log[k]||0)+1;S.cycle++;const t=S.tasks.find(x=>x.id==S.sel);if(t)t.p=(t.p||0)+1;save();stats();tasks();
-    setMode(S.cycle%4==0?2:1);if(S.log[k]==S.cfg.goal){$("cur").textContent="🎉 وصلت هدف اليوم!";setTimeout(draw,6000)}}else setMode(0);
+    setMode(S.cycle%4==0?2:1);if(S.log[k]>=S.cfg.goal)S.goalHit=1;chkAch();if(S.log[k]==S.cfg.goal){$("cur").textContent="🎉 وصلت هدف اليوم!";setTimeout(draw,6000)}}else setMode(0);
   if(S.cfg.auto&&!FAST)start();
 }
 $("t").parentElement.style.cursor="pointer";$("t").parentElement.onclick=()=>$("go").click();
@@ -121,7 +138,7 @@ function tasks(){
   $("list").innerHTML=S.tasks.length?S.tasks.map(t=>`<div class="task ${t.d?"done":""} ${t.id==S.sel?"sel":""}" data-id="${t.id}"><button class="chk" data-a="c">${t.d?"✓":""}</button><div class="n" data-a="s">${t.n.replace(/</g,"&lt;")}</div><span class="pc">🍅 ${AR(t.p||0)}</span><button class="x" data-a="x">✕</button></div>`).join(""):'<p style="color:#94a3b8;text-align:center;margin:14px 0">ضيف أول مهمة، ودوس عليها لتختارها.</p>';
 }
 $("list").onclick=e=>{const el=e.target.closest("[data-a]");if(!el)return;const id=el.closest(".task").dataset.id,t=S.tasks.find(x=>String(x.id)==id),a=el.dataset.a;
-  if(a=="c")t.d=!t.d;else if(a=="x"){S.tasks=S.tasks.filter(x=>x!==t);if(S.sel==t.id)S.sel=null}else S.sel=t.id;save();tasks();draw()};
+  if(a=="c"){t.d=!t.d;S.doneCount=Math.max(0,(S.doneCount||0)+(t.d?1:-1));chkAch()}else if(a=="x"){S.tasks=S.tasks.filter(x=>x!==t);if(S.sel==t.id)S.sel=null}else S.sel=t.id;save();tasks();draw()};
 function add(){const v=$("in").value.trim();if(!v)return;const t={id:Date.now(),n:v,p:0,d:false};S.tasks.push(t);if(!S.sel)S.sel=t.id;$("in").value="";save();tasks();draw()}
 $("addb").onclick=add;$("in").onkeydown=e=>{if(e.key=="Enter")add()};
 const DN=["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
@@ -138,10 +155,11 @@ function stats(){
 }
 if(location.search.includes("demo")&&!S.tasks.length){S.tasks=[{id:1,n:"مذاكرة جافاسكريبت",p:4,d:false},{id:2,n:"مراجعة الإيميلات",p:1,d:true},{id:3,n:"تمرين رياضة",p:0,d:false}];S.sel=1;
   [0,1,2,3,4,5,6].forEach((i,j)=>{const d=new Date();d.setDate(d.getDate()-i);S.log[dk(d)]=[5,3,6,0,4,2,7][j]})}
-tasks();stats();draw();
+tasks();stats();draw();chkAch();
 if(S.run&&S.run.end){mode=S.run.mode|0;if(mode<0||mode>2)mode=0;const rem=(S.run.end-Date.now())/1000;if(rem>0){left=rem;start()}else{left=0;S.run=null;finish()}draw()}
-window.T={get s(){return{mode,run,left,cycle:S.cycle,today:S.log[dk()]||0}},FAST};
+window.T={chk:chkAch,S:()=>S,get s(){return{mode,run,left,cycle:S.cycle,today:S.log[dk()]||0}},FAST};
 </script>
 </body></html>
+
 
 
