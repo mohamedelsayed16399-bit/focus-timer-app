@@ -99,12 +99,13 @@ function start(){if(run)return;run=true;end=Date.now()+left*1000;tick=setInterva
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&run){try{navigator.wakeLock&&navigator.wakeLock.request('screen').then(l=>wl=l).catch(()=>{})}catch(e){}step()}});
 function step(){left=Math.max(0,(end-Date.now())/1000);draw();if(left<=0)finish()}
 function finish(){
-  stop();beep();
+  stop();beep();try{navigator.vibrate&&navigator.vibrate([200,100,200,100,300])}catch(e){}
   try{if(S.cfg.notif&&window.Notification&&Notification.permission==='granted')new Notification(mode==0?'خلصت جلسة التركيز 🍅':'الاستراحة خلصت، يلا نرجع',{body:mode==0?'خد استراحة':'ابدأ جلسة جديدة'})}catch(e){}
   if(mode==0){const k=dk();S.min[k]=(S.min[k]!=null?S.min[k]:(S.log[k]||0)*25)+Math.round(DUR[0]/60);S.log[k]=(S.log[k]||0)+1;S.cycle++;const t=S.tasks.find(x=>x.id==S.sel);if(t)t.p=(t.p||0)+1;save();stats();tasks();
-    setMode(S.cycle%4==0?2:1)}else setMode(0);
+    setMode(S.cycle%4==0?2:1);if(S.log[k]==S.cfg.goal){$("cur").textContent="🎉 وصلت هدف اليوم!";setTimeout(draw,6000)}}else setMode(0);
   if(S.cfg.auto&&!FAST)start();
 }
+$("t").parentElement.style.cursor="pointer";$("t").parentElement.onclick=()=>$("go").click();
 $("go").onclick=()=>run?(stop(),draw()):start();
 $("reset").onclick=()=>setMode(mode);
 $("skip").onclick=()=>setMode(mode==0?1:0);
@@ -142,4 +143,5 @@ if(S.run&&S.run.end){mode=S.run.mode|0;if(mode<0||mode>2)mode=0;const rem=(S.run
 window.T={get s(){return{mode,run,left,cycle:S.cycle,today:S.log[dk()]||0}},FAST};
 </script>
 </body></html>
+
 
