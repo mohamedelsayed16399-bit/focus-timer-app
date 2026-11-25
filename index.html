@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>تركيز - مؤقت بومودورو</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#111827;color:#f1f5f9;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;min-height:100vh;transition:background .6s}
+body.break{background:#052e2b}
+.wrap{max-width:520px;margin:auto;padding:16px}
+.tabs{display:flex;background:#0006;border-radius:14px;padding:4px;margin-bottom:14px}
+.tabs button{flex:1;border:0;background:none;color:#cbd5e1;padding:11px;border-radius:11px;font-size:15px;font-family:inherit}
+.tabs button.on{background:#ffffff22;color:#fff;font-weight:700}
+.ringbox{position:relative;width:min(80vw,300px);margin:8px auto}
+svg{width:100%;display:block;transform:rotate(-90deg)}
+circle{fill:none;stroke-width:12}
+#bg{stroke:#ffffff18}
+#fg{stroke:#f87171;stroke-linecap:round;transition:stroke-dashoffset .3s linear,stroke .6s}
+body.break #fg{stroke:#34d399}
+.time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#t{font-size:58px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr}
+#cur{font-size:14px;color:#cbd5e1;max-width:70%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl{display:flex;gap:12px;justify-content:center;margin:14px 0}
+.go{background:#f87171;color:#fff;border:0;border-radius:40px;padding:16px 50px;font-size:20px;font-weight:800;font-family:inherit}
+body.break .go{background:#10b981}
+.sec{background:#ffffff12;color:#fff;border:0;border-radius:40px;padding:16px 22px;font-size:16px;font-family:inherit}
+.card{background:#0004;border-radius:18px;padding:14px;margin-top:14px}
+.card h3{margin:0 0 10px;font-size:15px;color:#cbd5e1;font-weight:600}
+.add{display:flex;gap:8px}
+input{flex:1;background:#0006;border:1px solid #ffffff22;color:#fff;border-radius:12px;padding:12px;font-size:16px;font-family:inherit;min-width:0}
+.add button{background:#334155;color:#fff;border:0;border-radius:12px;padding:0 18px;font-size:22px}
+.task{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #ffffff12}
+.task:last-child{border:0}
+.task.sel{background:#f8717122;border-radius:10px}
+.task .n{flex:1;min-width:0;font-size:16px}
+.task.done .n{text-decoration:line-through;opacity:.5}
+.chk{width:26px;height:26px;border-radius:8px;border:2px solid #94a3b8;background:none;color:#fff;font-size:15px;padding:0}
+.done .chk{background:#10b981;border-color:#10b981}
+.pc{font-size:13px;color:#fca5a5;white-space:nowrap}
+.x{background:none;border:0;color:#64748b;font-size:18px;padding:6px}
+canvas{width:100%;display:block}
+.row{display:flex;justify-content:space-between;color:#cbd5e1;font-size:14px;margin-bottom:6px}
+.row b{color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tabs"><button data-m="0" class="on">تركيز</button><button data-m="1">استراحة قصيرة</button><button data-m="2">استراحة طويلة</button></div>
+  <div class="ringbox"><svg viewBox="0 0 200 200"><circle id="bg" cx="100" cy="100" r="90"/><circle id="fg" cx="100" cy="100" r="90" stroke-dasharray="565.5" stroke-dashoffset="0"/></svg>
+    <div class="time"><div id="t">25:00</div><div id="cur">اختار مهمة</div></div></div>
+  <div class="ctl"><button class="go" id="go">ابدأ</button><button class="sec" id="reset">إعادة</button></div>
+  <div class="card"><h3>المهام</h3><div class="add"><input id="in" placeholder="مهمة جديدة..." maxlength="60"><button id="addb">+</button></div><div id="list"></div></div>
+  <div class="card"><h3>آخر ٧ أيام (جلسات تركيز)</h3><canvas id="ch" width="520" height="170"></canvas>
+    <div class="row" style="margin-top:8px"><span>النهارده: <b id="today">٠</b></span><span>الإجمالي: <b id="total">٠</b></span><span>الدقائق اليوم: <b id="mins">٠</b></span></div></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const FAST=location.search.includes("fast");
+const DUR=FAST?[5,3,4]:[25*60,5*60,15*60];
+const AR=n=>String(n).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d]);
+let S;try{S=JSON.parse(localStorage.getItem("focus1")||"null")}catch(e){}
+S=S||{tasks:[],sel:null,log:{},cycle:0};
+const save=()=>localStorage.setItem("focus1",JSON.stringify(S));
+const dk=(d=new Date())=>d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+let mode=0,left=DUR[0],end=0,run=false,tick;
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)();[0,.25,.5].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.3,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.2);o.start(c.currentTime+t);o.stop(c.currentTime+t+.22)})}catch(e){}if(navigator.vibrate)navigator.vibrate([200,100,200])}
+function draw(){
+  const m=Math.floor(left/60),s=Math.floor(left%60);
+  const txt=String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+  $("t").textContent=txt;document.title=(run?txt+" · ":"")+"تركيز";
+  $("fg").style.strokeDashoffset=565.5*(1-left/DUR[mode]);
+  document.body.classList.toggle("break",mode>0);
+  document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",i==mode));
+  $("go").textContent=run?"إيقاف مؤقت":"ابدأ";
+  const t=S.tasks.find(x=>x.id==S.sel);$("cur").textContent=t?t.n:"اختار مهمة";
+}
+function setMode(m){stop();mode=m;left=DUR[m];draw()}
+function stop(){run=false;clearInterval(tick)}
+function start(){if(run)return;run=true;end=Date.now()+left*1000;tick=setInterval(step,200);draw()}
+function step(){left=Math.max(0,(end-Date.now())/1000);draw();if(left<=0)finish()}
+function finish(){
+  stop();beep();
+  if(mode==0){const k=dk();S.log[k]=(S.log[k]||0)+1;S.cycle++;const t=S.tasks.find(x=>x.id==S.sel);if(t)t.p=(t.p||0)+1;save();stats();tasks();
+    setMode(S.cycle%4==0?2:1)}else setMode(0);
+}
+$("go").onclick=()=>run?(stop(),draw()):start();
+$("reset").onclick=()=>setMode(mode);
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setMode(+b.dataset.m));
+function tasks(){
+  $("list").innerHTML=S.tasks.length?S.tasks.map(t=>`<div class="task ${t.d?"done":""} ${t.id==S.sel?"sel":""}" data-id="${t.id}"><button class="chk" data-a="c">${t.d?"✓":""}</button><div class="n" data-a="s">${t.n.replace(/</g,"&lt;")}</div><span class="pc">🍅 ${AR(t.p||0)}</span><button class="x" data-a="x">✕</button></div>`).join(""):'<p style="color:#94a3b8;text-align:center;margin:14px 0">ضيف أول مهمة، ودوس عليها لتختارها.</p>';
+}
+$("list").onclick=e=>{const el=e.target.closest("[data-a]");if(!el)return;const id=el.closest(".task").dataset.id,t=S.tasks.find(x=>String(x.id)==id),a=el.dataset.a;
+  if(a=="c")t.d=!t.d;else if(a=="x"){S.tasks=S.tasks.filter(x=>x!==t);if(S.sel==t.id)S.sel=null}else S.sel=t.id;save();tasks();draw()};
+function add(){const v=$("in").value.trim();if(!v)return;const t={id:Date.now(),n:v,p:0,d:false};S.tasks.push(t);if(!S.sel)S.sel=t.id;$("in").value="";save();tasks();draw()}
+$("addb").onclick=add;$("in").onkeydown=e=>{if(e.key=="Enter")add()};
+const DN=["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
+function stats(){
+  const c=$("ch"),x=c.getContext("2d");x.clearRect(0,0,520,170);
+  const days=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push([d,S.log[dk(d)]||0])}
+  const mx=Math.max(4,...days.map(d=>d[1]));
+  days.forEach(([d,v],i)=>{const X=14+i*72,h=v/mx*100;x.fillStyle=i==6?"#f87171":"#f8717188";x.beginPath();x.roundRect(X,125-h,46,Math.max(h,3),8);x.fill();
+    x.fillStyle="#cbd5e1";x.font="15px system-ui";x.textAlign="center";x.fillText(DN[d.getDay()],X+23,150);if(v)x.fillText(AR(v),X+23,118-h)});
+  const tot=Object.values(S.log).reduce((a,b)=>a+b,0),td=S.log[dk()]||0;
+  $("today").textContent=AR(td);$("total").textContent=AR(tot);$("mins").textContent=AR(td*25);
+}
+if(location.search.includes("demo")&&!S.tasks.length){S.tasks=[{id:1,n:"مذاكرة جافاسكريبت",p:4,d:false},{id:2,n:"مراجعة الإيميلات",p:1,d:true},{id:3,n:"تمرين رياضة",p:0,d:false}];S.sel=1;
+  [0,1,2,3,4,5,6].forEach((i,j)=>{const d=new Date();d.setDate(d.getDate()-i);S.log[dk(d)]=[5,3,6,0,4,2,7][j]})}
+tasks();stats();draw();
+window.T={get s(){return{mode,run,left,cycle:S.cycle,today:S.log[dk()]||0}},FAST};
+</script>
+</body></html>
